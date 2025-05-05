@@ -1,0 +1,17 @@
+뭐 딱히 리드미가 없긴 한데
+백엔드구요
+
+외부 API 구현, FCM 해야하고
+app/services 폴더 로직 마저 완성해야하고
+mongodb IP 화이트리스트 때문에 아마 코드 돌리려면 제가 IP 추가해드려야할거고
+
+tests 폴더에 구현한 app 애들 1대 1대응 테스트 코드 들어있고
+다 잘 작동하고
+tests 폴더 먼저 작성했다고 우기면 Test Driven Development이고
+
+구현하면서 애매했던 부분 + 몇가지 논의해야 할 부분은 수요일에 언급하겠습니다.
+.env 파일에 이제  MONGO_URI, MONGO_DB, MONGO_TESTDB, SECRET_KEY, ALGORITHM같은게 들어 있고
+그건 자동으로 gitignore이라 안 들어가서 따로 채팅방같은데다 공유드려야할거같고
+
+전체적인 코드 구조는 수요일에 만나서 설명 드리겠습니다.
+venv 만들어서 거기다가 pip install requirements.txt인가 하면 됩니다.

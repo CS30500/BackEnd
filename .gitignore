@@ -1,0 +1,5 @@
+# .gitignore 내용 예시
+venv/
+__pycache__/
+.env
+.DS_Store
