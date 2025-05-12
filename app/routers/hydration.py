@@ -67,11 +67,16 @@ def get_today_summary(
 
 @router.get("/monthly", response_model=List[HydrationSummary])
 def get_monthly_summary(
+    year: int = Query(default=None, description="조회할 연도 (예: 2024)"),
+    month: int = Query(default=None, ge=1, le=12, description="조회할 월 (1~12)"),
     user=Depends(verify_token),
     db: Database = Depends(get_mongodb)
 ):
     now = datetime.utcnow()
-    start = datetime(now.year, now.month, 1)
+    y = year or now.year
+    m = month or now.month
+
+    start = datetime(y, m, 1)
     end = (start + timedelta(days=32)).replace(day=1)
 
     # 1. 날짜별 음수량 합산
@@ -101,7 +106,7 @@ def get_monthly_summary(
             target_map[d] = t
 
     # 3. 날짜별 정리
-    all_dates = get_all_dates_in_month(now.year, now.month)
+    all_dates = get_all_dates_in_month(y, m)
     result = [
         HydrationSummary(
             date=d,

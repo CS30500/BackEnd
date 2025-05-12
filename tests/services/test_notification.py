@@ -2,8 +2,8 @@ import pytest
 from datetime import datetime, timedelta
 from app.services.notification import should_notify
 
-def insert_test_target_and_logs(user_id, db, intake_ml=800.0, target_ml=2000.0):
-    now = datetime.utcnow().replace(hour=18, minute=0, second=0, microsecond=0)  # 오후 6시 기준
+def insert_test_target_and_logs(user_id, db, intake_ml=800.0, target_ml=2000.0, now: datetime = None):
+    now = now or datetime.utcnow().replace(hour=18, minute=0, second=0, microsecond=0)
     today_str = now.strftime("%Y-%m-%d")
 
     db.daily_targets.insert_one({
@@ -22,10 +22,11 @@ def insert_test_target_and_logs(user_id, db, intake_ml=800.0, target_ml=2000.0):
     return now  # 테스트 시간 리턴 (비율 계산 검증용)
 
 @pytest.mark.parametrize("user_id, intake_ml, target_ml, expected", [
-    ("testuser_notify", 800.0, 2000.0, True),  # 40%만 섭취, 오후 6시면 부족 → 알림 필요
-    ("testuser_notify", 1800.0, 2000.0, False),  # 90% 섭취 → 충분히 마심
+    ("testuser_notify_1", 800.0, 2000.0, True),
+    ("testuser_notify_2", 1800.0, 2000.0, False),
 ])
 def test_should_notify(user_id, intake_ml, target_ml, expected, db):
-    insert_test_target_and_logs(user_id, db, intake_ml, target_ml)
-    result = should_notify(user_id, db=db)
+    fixed_time = datetime.utcnow().replace(hour=10, minute=0, second=0, microsecond=0)
+    insert_test_target_and_logs(user_id, db, intake_ml, target_ml, now=fixed_time)
+    result = should_notify(user_id, db=db, now = fixed_time)
     assert result == expected

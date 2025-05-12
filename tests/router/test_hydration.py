@@ -45,25 +45,35 @@ def test_today_summary(client, db):
     assert data["target_ml"] == 1500
     assert data["total_intake_ml"] == 500
 
-def test_monthly_summary(client, db):
-    user_id = "user1"
+def test_monthly_summary_with_query_params(client, db):
+    user_id = "user2"
     db.users.insert_one({"user_id": user_id})
     token = create_token({"user_id": user_id})
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+
+    # 날짜 지정 → 예: 2024년 4월 15일
+    test_date = datetime(2024, 4, 15)
+    test_date_str = test_date.strftime("%Y-%m-%d")
 
     db.daily_targets.insert_one({
         "user_id": user_id,
-        "date": today,
-        "target_ml": 1500,
-        "timestamp": datetime.utcnow()
+        "date": test_date_str,
+        "target_ml": 1800,
+        "timestamp": test_date
     })
-    db.water_logs.insert_many([
-        {"user_id": user_id, "amount_ml": 300, "timestamp": datetime.utcnow()}
-    ])
+    db.water_logs.insert_one({
+        "user_id": user_id,
+        "amount_ml": 600,
+        "timestamp": test_date
+    })
 
-    res = client.get("/hydration/monthly", headers={"Authorization": f"Bearer {token}"})
+    # ✅ year/month 명시적으로 지정
+    res = client.get(
+        "/hydration/monthly?year=2024&month=4",
+        headers={"Authorization": f"Bearer {token}"}
+    )
     assert res.status_code == 200
-    summary = next((d for d in res.json() if d["date"] == today), None)
+    data = res.json()
+    summary = next((d for d in data if d["date"] == test_date_str), None)
     assert summary is not None
-    assert summary["target_ml"] == 1500
-    assert summary["total_intake_ml"] == 300
+    assert summary["target_ml"] == 1800
+    assert summary["total_intake_ml"] == 600
