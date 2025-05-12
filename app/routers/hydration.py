@@ -5,40 +5,47 @@ from pydantic import BaseModel, Field
 from app.database import get_mongodb
 from app.auth_utils import verify_token
 from app.models.water_log import WaterLog, DailyTarget, HydrationSummary
+from pymongo.database import Database
 
-router = APIRouter()
-db = get_mongodb()
+router = APIRouter(prefix="/hydration", tags=["Hydration"])
 
-
-
-
-def get_all_dates_in_month(year: int, month: int):
-    first_day = datetime(year, month, 1)
+def get_all_dates_in_month(year: int, month: int) -> List[str]:
     dates = []
-    current = first_day
+    current = datetime(year, month, 1)
     while current.month == month:
         dates.append(current.strftime("%Y-%m-%d"))
         current += timedelta(days=1)
     return dates
 
 @router.post("/log")
-def add_water_log(amount: float = Query(..., gt=0), user=Depends(verify_token)):
+def add_water_log(
+    amount: float = Query(..., gt=0),
+    user=Depends(verify_token),
+    db: Database = Depends(get_mongodb)
+):
     today = datetime.utcnow().strftime("%Y-%m-%d")
     log = WaterLog(user_id=user["user_id"], amount_ml=amount, date=today)
     db.water_logs.insert_one(log.model_dump())
     return {"message": "음수량이 기록되었습니다."}
 
 @router.post("/target")
-def set_daily_target(target_ml: float = Query(..., gt=0), user=Depends(verify_token)):
+def set_daily_target(
+    target_ml: float = Query(..., gt=0),
+    user=Depends(verify_token),
+    db: Database = Depends(get_mongodb)
+):
     today = datetime.utcnow().strftime("%Y-%m-%d")
     target = DailyTarget(user_id=user["user_id"], target_ml=target_ml, date=today)
     db.daily_targets.insert_one(target.model_dump())
     return {"message": "목표 섭취량이 설정되었습니다."}
 
 @router.get("/today", response_model=HydrationSummary)
-def get_today_summary(user=Depends(verify_token)):
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    start = datetime.strptime(today, "%Y-%m-%d")
+def get_today_summary(
+    user=Depends(verify_token),
+    db: Database = Depends(get_mongodb)
+):
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    start = datetime.strptime(today_str, "%Y-%m-%d")
     end = start + timedelta(days=1)
 
     total = db.water_logs.aggregate([
@@ -50,21 +57,24 @@ def get_today_summary(user=Depends(verify_token)):
     ])
     total_ml = next(total, {}).get("total", 0)
 
-    latest_target = db.daily_targets.find_one(
-        {"user_id": user["user_id"], "date": today},
+    target = db.daily_targets.find_one(
+        {"user_id": user["user_id"], "date": today_str},
         sort=[("timestamp", -1)]
     )
-    target_ml = latest_target["target_ml"] if latest_target else 2000.0
+    target_ml = target["target_ml"] if target else 2000.0
 
-    return HydrationSummary(date=today, total_intake_ml=total_ml, target_ml=target_ml)
+    return HydrationSummary(date=today_str, total_intake_ml=total_ml, target_ml=target_ml)
 
 @router.get("/monthly", response_model=List[HydrationSummary])
-def get_monthly_summary(user=Depends(verify_token)):
-    today = datetime.utcnow()
-    start = datetime(today.year, today.month, 1)
+def get_monthly_summary(
+    user=Depends(verify_token),
+    db: Database = Depends(get_mongodb)
+):
+    now = datetime.utcnow()
+    start = datetime(now.year, now.month, 1)
     end = (start + timedelta(days=32)).replace(day=1)
 
-    # 하루 단위 합산
+    # 1. 날짜별 음수량 합산
     pipeline = [
         {"$match": {
             "user_id": user["user_id"],
@@ -75,10 +85,11 @@ def get_monthly_summary(user=Depends(verify_token)):
             "total": {"$sum": "$amount_ml"}
         }}
     ]
-    results = list(db.water_logs.aggregate(pipeline))
-    intake_map = {r["_id"]: r["total"] for r in results}
+    intake_map = {
+        doc["_id"]: doc["total"] for doc in db.water_logs.aggregate(pipeline)
+    }
 
-    # 하루 단위 목표
+    # 2. 하루별 최신 목표
     targets = db.daily_targets.find({
         "user_id": user["user_id"],
         "date": {"$gte": start.strftime("%Y-%m-%d"), "$lt": end.strftime("%Y-%m-%d")}
@@ -89,10 +100,9 @@ def get_monthly_summary(user=Depends(verify_token)):
         if d not in target_map or t["timestamp"] > target_map[d]["timestamp"]:
             target_map[d] = t
 
-    today = datetime.utcnow()
-    year, month = today.year, today.month
-    all_dates = get_all_dates_in_month(year, month)
-    res = [
+    # 3. 날짜별 정리
+    all_dates = get_all_dates_in_month(now.year, now.month)
+    result = [
         HydrationSummary(
             date=d,
             total_intake_ml=intake_map.get(d, 0),
@@ -100,5 +110,4 @@ def get_monthly_summary(user=Depends(verify_token)):
         )
         for d in all_dates
     ]
-    # print(res)
-    return res
+    return result

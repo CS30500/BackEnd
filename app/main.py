@@ -10,12 +10,12 @@ from app.database import get_mongodb
 import uvicorn
 
 app = FastAPI()
-app.include_router(auth_router, prefix='/auth')
-app.include_router(profile_router, prefix='/profile')
-app.include_router(hydration_router, prefix = "/hydration")
-app.include_router(activity_router, prefix = "/activity")
-app.include_router(location_router, prefix = "/location")
-app.include_router(bottle_router, prefix = "/bottle")
+app.include_router(auth_router)
+app.include_router(profile_router)
+app.include_router(hydration_router)
+app.include_router(activity_router)
+app.include_router(location_router)
+app.include_router(bottle_router)
 
 
 @app.get("/")

@@ -1,46 +1,69 @@
 import pytest
 from datetime import datetime
+from app.auth_utils import create_token
 
-def test_hydration_log_and_target_and_summary(client, make_unique_user):
-    # 1. 유저 생성 및 회원가입
-    TEST_USER = make_unique_user()
-    register_res = client.post("/auth/register", json=TEST_USER)
-    assert register_res.status_code == 200
+def test_set_daily_hydration_target(client, db):
+    db.users.insert_one({"user_id": "user1"})
+    token = create_token({"user_id": "user1"})
 
-    # 2. 로그인 후 토큰 발급
-    login_data = {
-        "user_id": TEST_USER["user_id"],
-        "password": TEST_USER["password"]
-    }
-    login_res = client.post("/auth/login", json=login_data)
-    assert login_res.status_code == 200
-    token = login_res.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    res = client.post("/hydration/target", params={"target_ml": 1800}, headers={
+        "Authorization": f"Bearer {token}"
+    })
+    assert res.status_code == 200
+    assert res.json()["message"] == "목표 섭취량이 설정되었습니다."
 
-    # 3. 음수 목표량 설정
-    target_res = client.post("/hydration/target", params={"target_ml": 1800}, headers=headers)
-    assert target_res.status_code == 200
-    assert target_res.json()["message"] == "목표 섭취량이 설정되었습니다."
+def test_log_water_intake(client, db):
+    db.users.insert_one({"user_id": "user1"})
+    token = create_token({"user_id": "user1"})
 
-    # 4. 음수 기록 3회
-    for amount in [250, 300, 200]:
-        log_res = client.post("/hydration/log", params={"amount": amount}, headers=headers)
-        assert log_res.status_code == 200
-        assert log_res.json()["message"] == "음수량이 기록되었습니다."
+    res = client.post("/hydration/log", params={"amount": 300}, headers={
+        "Authorization": f"Bearer {token}"
+    })
+    assert res.status_code == 200
+    assert res.json()["message"] == "음수량이 기록되었습니다."
 
-    # 5. 오늘 요약 확인
-    today_res = client.get("/hydration/today", headers=headers)
-    assert today_res.status_code == 200
-    today_data = today_res.json()
-    assert today_data["target_ml"] == 1800
-    assert today_data["total_intake_ml"] == 750  # 250 + 300 + 200
+def test_today_summary(client, db):
+    user_id = "user1"
+    db.users.insert_one({"user_id": user_id})
+    token = create_token({"user_id": user_id})
+    today = datetime.utcnow().strftime("%Y-%m-%d")
 
-    # 6. 월간 요약 확인
-    monthly_res = client.get("/hydration/monthly", headers=headers)
-    assert monthly_res.status_code == 200
-    monthly_data = monthly_res.json()
-    today_str = datetime.utcnow().strftime("%Y-%m-%d")
-    today_summary = next((d for d in monthly_data if d["date"] == today_str), None)
-    assert today_summary is not None
-    assert today_summary["total_intake_ml"] == 750
-    assert today_summary["target_ml"] == 1800
+    # 테스트용 기록 삽입
+    db.daily_targets.insert_one({
+        "user_id": user_id,
+        "date": today,
+        "target_ml": 1500,
+        "timestamp": datetime.utcnow()
+    })
+    db.water_logs.insert_many([
+        {"user_id": user_id, "amount_ml": 500, "timestamp": datetime.utcnow()}
+    ])
+
+    res = client.get("/hydration/today", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["target_ml"] == 1500
+    assert data["total_intake_ml"] == 500
+
+def test_monthly_summary(client, db):
+    user_id = "user1"
+    db.users.insert_one({"user_id": user_id})
+    token = create_token({"user_id": user_id})
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+
+    db.daily_targets.insert_one({
+        "user_id": user_id,
+        "date": today,
+        "target_ml": 1500,
+        "timestamp": datetime.utcnow()
+    })
+    db.water_logs.insert_many([
+        {"user_id": user_id, "amount_ml": 300, "timestamp": datetime.utcnow()}
+    ])
+
+    res = client.get("/hydration/monthly", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    summary = next((d for d in res.json() if d["date"] == today), None)
+    assert summary is not None
+    assert summary["target_ml"] == 1500
+    assert summary["total_intake_ml"] == 300

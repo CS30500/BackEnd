@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import Optional
 
 class UserRegister(BaseModel):
     user_id: str
@@ -10,10 +11,10 @@ class UserLogin(BaseModel):
     password: str
 
 class ProfileModel(BaseModel):
-    sex: str = Field(..., description="성별 (M/F)")
-    age: int = Field(..., gt=0, description="나이")
-    height: float = Field(..., gt=0, description="키 (cm)")
-    weight: float = Field(..., gt=0, description="체중 (kg)")
+    sex: Optional[str] = Field(None, description="성별 (M/F)")
+    age: Optional[int] = Field(None, gt=0, description="나이")
+    height: Optional[float] = Field(None, gt=0, description="키 (cm)")
+    weight: Optional[float] = Field(None, gt=0, description="체중 (kg)")
 
 class User(BaseModel):
     user_id: str = Field(..., description="아이디")

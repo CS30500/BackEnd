@@ -1,36 +1,40 @@
-def test_profile_registration_and_retrieval(client, make_unique_user):
-    TEST_USER = make_unique_user()
-    
-    # 회원가입
-    res = client.post("/auth/register", json=TEST_USER)
-    assert res.status_code == 200
+from app.auth_utils import create_token
 
-    # 로그인 → 토큰 획득
-    login_data = {
-        "user_id": TEST_USER["user_id"],
-        "password": TEST_USER["password"]
-    }
-    res = client.post("/auth/login", json=login_data)
-    assert res.status_code == 200
-    token = res.json()["access_token"]
+def test_profile_registration(client, db):
+    # 유저 수동 삽입
+    user_id = "testuser_profile"
+    db.users.insert_one({"user_id": user_id})
+    token = create_token({"user_id": user_id})
 
-    # 프로필 등록
     profile_data = {
         "sex": "F",
         "age": 30,
         "height": 165.0,
         "weight": 55.5
     }
-    res = client.post("/profile", json=profile_data, headers={"Authorization": f"Bearer {token}"})
+    res = client.post("/profile", json=profile_data, headers={
+        "Authorization": f"Bearer {token}"
+    })
+
     assert res.status_code == 200
     assert res.json()["message"] == "프로필 등록 성공"
 
-    # 프로필 조회
+def test_profile_retrieval(client, db):
+    user_id = "testuser_profile"
+    db.users.insert_one({
+        "user_id": user_id,
+        "sex": "F",
+        "age": 30,
+        "height": 165.0,
+        "weight": 55.5
+    })
+    token = create_token({"user_id": user_id})
+
     res = client.get("/profile", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200
-    returned = res.json()
-    assert returned["user_id"] == TEST_USER["user_id"]
-    assert returned["sex"] == "F"
-    assert returned["age"] == 30
-    assert returned["height"] == 165.0
-    assert returned["weight"] == 55.5
+    data = res.json()
+    assert data["user_id"] == user_id
+    assert data["sex"] == "F"
+    assert data["age"] == 30
+    assert data["height"] == 165.0
+    assert data["weight"] == 55.5

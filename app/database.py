@@ -3,29 +3,36 @@ from pymongo.errors import ServerSelectionTimeoutError
 from dotenv import load_dotenv
 import os
 import sys
+import mongomock 
 
 load_dotenv()
 
 class MongoDB:
     def __init__(self, is_test=False):
-        self.uri = os.getenv("MONGO_URI")
-        self.db_name = os.getenv("MONGO_TESTDB") if is_test else os.getenv("MONGO_DB")
-        self.client = MongoClient(self.uri)
+        self.is_test = is_test
+        if is_test:
+            self.client = mongomock.MongoClient()
+            self.db_name = "test_db"
+        else:
+            self.uri = os.getenv("MONGO_URI")
+            self.db_name = os.getenv("MONGO_DB")
+            self.client = MongoClient(self.uri)
         self.db = self.client[self.db_name]
-        
+
     def connect(self):
-        try:
-            # 연결 테스트
-            self.client.server_info()
-            print(f"MongoDB 연결 성공! (DB: {self.db_name})")
-            return self
-        except ServerSelectionTimeoutError as e:
-            print(f"MongoDB 연결 실패: {e}")
-            raise e
-            
+        if not self.is_test:
+            try:
+                self.client.server_info()  # 실제 Mongo 연결 확인
+                print(f"MongoDB 연결 성공! (DB: {self.db_name})")
+            except ServerSelectionTimeoutError as e:
+                print(f"MongoDB 연결 실패: {e}")
+                raise e
+        return self
+
     def close(self):
         self.client.close()
         print("MongoDB 연결 종료")
+
 
     @property
     def users(self):
@@ -57,5 +64,7 @@ class MongoDB:
         
 
 def get_mongodb():
-    is_test = "pytest" in sys.modules
-    return MongoDB(is_test=is_test).connect()
+    return MongoDB().connect().db
+
+def get_test_mongodb():
+    return MongoDB(is_test=True).connect().db
