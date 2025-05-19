@@ -1,38 +1,23 @@
 from fastapi import FastAPI
-from app.routers.auth import router as auth_router
-from app.routers.profile import router as profile_router
-from app.routers.hydration import router as hydration_router
-from app.routers.activity import router as activity_router
-from app.routers.location import router as location_router
-from app.routers.bottle import router as bottle_router
-
-from app.database import get_mongodb
+from app.routers import auth, profile, hydration, activity, location, bottle
+from app.scheduler import start_scheduler
 import uvicorn
 
 app = FastAPI()
-app.include_router(auth_router)
-app.include_router(profile_router)
-app.include_router(hydration_router)
-app.include_router(activity_router)
-app.include_router(location_router)
-app.include_router(bottle_router)
-
+app.include_router(auth.router)
+app.include_router(profile.router)
+app.include_router(hydration.router)
+app.include_router(activity.router)
+app.include_router(location.router)
+app.include_router(bottle.router)
 
 @app.get("/")
 def root():
     return {"message": "Hello World"}
 
 def main():
-    # MongoDB 연결 시도
-    mongodb = get_mongodb()
-    if mongodb.connect():
-        # FastAPI 서버 실행
-        uvicorn.run(app, host="0.0.0.0", port=8000)
-    else:
-        print("MongoDB 연결에 실패했습니다.")
-        
-    # 프로그램 종료 시 연결 종료
-    mongodb.close()
+    start_scheduler()  # ⬅️ 스케줄러 시작
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 if __name__ == "__main__":
     main()

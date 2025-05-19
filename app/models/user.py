@@ -25,3 +25,6 @@ class User(BaseModel):
     weight: float = Field(..., description="체중 (kg)")
     sex: str = Field(..., description="성별 (M/F)")
     age: int = Field(..., description="나이")
+
+class FCMToken(BaseModel):
+    token: str

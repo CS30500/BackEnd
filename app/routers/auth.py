@@ -2,8 +2,8 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from app.database import get_mongodb
-from app.models.user import UserRegister, UserLogin
-from app.auth_utils import hash_password, verify_password, create_token
+from app.models.user import UserRegister, UserLogin, FCMToken
+from app.auth_utils import hash_password, verify_password, create_token, verify_token
 from dotenv import load_dotenv
 import os
 
@@ -36,3 +36,29 @@ def login(user: UserLogin, db=Depends(get_mongodb)):
     
     token = create_token({"user_id": user.user_id})
     return {"access_token": token}
+
+
+@router.get("/verify")
+def verify(user=Depends(verify_token)):
+    return {
+        "message": "토큰이 유효합니다.",
+        "user_id": user["user_id"]
+    }
+
+from pydantic import BaseModel
+
+
+
+@router.post("/fcm/register")
+def register_fcm_token(
+    fcm: FCMToken,
+    user=Depends(verify_token),
+    db=Depends(get_mongodb)
+):
+    db.fcm_tokens.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"token": fcm.token, "updated_at": datetime.utcnow()}},
+        upsert=True
+    )
+    return {"message": "FCM 토큰 등록 완료"}
+
