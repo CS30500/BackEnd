@@ -3,6 +3,7 @@ from app.database import get_mongodb
 from app.services.notification import run_hydration_alerts
 
 def alert_job():
+    print("efefef")
     db = get_mongodb()
     users = db.users.find({}, {"user_id": 1})
     for user in users:
@@ -13,6 +14,6 @@ def alert_job():
 
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    scheduler.add_job(alert_job, "interval", minutes=5)
+    scheduler.add_job(alert_job, "interval", seconds=5)
     scheduler.start()
     print("🔁 스케줄러 시작됨")

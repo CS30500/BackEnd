@@ -97,6 +97,7 @@ def should_alert_urgent_rate(user_id: str, db: Database, now: datetime = None) -
 
     return ml_per_hour >= average_rate * 2
 
+
 def should_alert_water_status(user_id: str, db: Database, now: datetime = None) -> bool:
     now = now or datetime.utcnow()
 

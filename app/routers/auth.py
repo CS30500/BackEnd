@@ -6,6 +6,12 @@ from app.models.user import UserRegister, UserLogin, FCMToken
 from app.auth_utils import hash_password, verify_password, create_token, verify_token
 from dotenv import load_dotenv
 import os
+import requests
+import os
+from google.oauth2 import service_account
+import google.auth.transport.requests
+import requests
+import json
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -62,3 +68,73 @@ def register_fcm_token(
     )
     return {"message": "FCM 토큰 등록 완료"}
 
+
+@router.post("/notify")
+def notify_user(
+    title: str,
+    body: str,
+    db=Depends(get_mongodb)
+):
+    token_entry = {
+        "token": "eXDCVngmQ1ew9fkgI6HuX6:APA91bHx-2gIidMr28cApYbA9EUnFcFB1WJTa3Qs1eYnmB2TH69fxqd9LXJjCeUnboDusM3aiDxIAycHCkCsBZLjzgqlKWOmyw44_L_1BM2jQnOn8kmupdU"
+    }
+
+    if not token_entry or "token" not in token_entry:
+        raise HTTPException(status_code=404, detail="FCM 토큰이 없음")
+
+    print("🚀 보내는 FCM 토큰:", token_entry["token"])
+
+    result = send_push_notification(token_entry["token"], title, body)
+    return {"result": result}
+
+
+
+
+import json
+import requests
+from google.oauth2 import service_account
+import google.auth.transport.requests
+
+def send_push_notification(token, title, body):
+    SERVICE_ACCOUNT_FILE = "smartbottle-c732c-fd3f28f3cca2.json"
+    PROJECT_ID = "smartbottle-c732c"
+
+    SCOPES = ["https://www.googleapis.com/auth/firebase.messaging"]
+    credentials = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+    )
+    credentials.refresh(google.auth.transport.requests.Request())
+    access_token = credentials.token
+
+    url = f"https://fcm.googleapis.com/v1/projects/{PROJECT_ID}/messages:send"
+    print("📡 요청 URL:", url)
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json; UTF-8"
+    }
+
+    payload = {
+        "message": {
+            "token": token,
+            "notification": {
+                "title": title,
+                "body": body
+            }
+        }
+    }
+
+    print("📦 전송 payload:", json.dumps(payload, indent=2))
+
+    response = requests.post(url, headers=headers, data=json.dumps(payload))
+    print("📨 응답 상태:", response.status_code)
+    print("📨 응답 본문:", response.text)
+
+    try:
+        return response.json()
+    except Exception:
+        return {
+            "error": "Invalid JSON",
+            "status": response.status_code,
+            "text": response.text
+        }

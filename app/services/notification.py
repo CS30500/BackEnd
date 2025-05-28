@@ -9,11 +9,19 @@ from app.services.alert_conditions import (  # 네가 작성한 파일 기준
     should_alert_urgent_rate,
     should_alert_water_status,
 )
+import os
+from dotenv import load_dotenv
+from firebase_admin import messaging
+from pymongo.database import Database
+from datetime import datetime, timedelta
+
+# .env 로드
+load_dotenv()
 
 def run_hydration_alerts(user_id: str, db: Database, now: datetime = None) -> list[dict]:
     now = now or datetime.utcnow()
     alerts = []
-    
+
     def send_alert(title: str, body: str) -> dict:
         # 30분 이내 동일한 알림 여부 확인
         recent = db.alert_logs.find_one({
@@ -26,17 +34,18 @@ def run_hydration_alerts(user_id: str, db: Database, now: datetime = None) -> li
             return {"message": "최근에 전송된 알림 → 생략", "title": title}
 
         token_doc = db.fcm_tokens.find_one({"user_id": user_id})
-        if not token_doc or "token" not in token_doc:
+        token = token_doc.get("token") if token_doc and "token" in token_doc else os.getenv("FCM_TEST_TOKEN")
+
+        if not token:
             return {"message": "FCM 토큰 없음", "title": title}
 
         try:
             message = messaging.Message(
                 notification=messaging.Notification(title=title, body=body),
-                token=token_doc["token"],
+                token=token,
             )
             response = messaging.send(message)
 
-            # ✅ 전송 후 로그 기록
             db.alert_logs.insert_one({
                 "user_id": user_id,
                 "title": title,
@@ -70,6 +79,5 @@ def run_hydration_alerts(user_id: str, db: Database, now: datetime = None) -> li
 
     if should_alert_water_status(user_id, db, now):
         alerts.append(send_alert("🥛 물 교체 필요", "물병 속 물이 오래되었어요. 새로운 물로 바꿔주세요!"))
-
 
     return alerts
